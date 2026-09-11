@@ -1,5 +1,5 @@
-import { getUserId } from "@/app/actions/auth";
-import { getUserById } from "@/services/authService";
+import { getUserId } from "universal-auth-nextjs";
+import { getUserById } from "universal-auth-nextjs";
 import { redirect } from "next/navigation";
 import { ProfileDetails } from "@/components/dashboard/profile-details";
 

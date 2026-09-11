@@ -1,4 +1,4 @@
-import { RegisterForm } from "@/components/auth/register-form";
+import { RegisterForm } from "universal-auth-nextjs";
 
 export default function RegisterPage() {
   return (

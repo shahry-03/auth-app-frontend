@@ -11,8 +11,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { UserDto } from "@/types";
-import { logout } from "@/services/authService";
+import { UserDto } from "universal-auth-nextjs";
+import { logout } from "universal-auth-nextjs";
 import { useRouter } from "next/navigation";
 import { LogOut, User } from "lucide-react";
 

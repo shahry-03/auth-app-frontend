@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { LoginForm } from "@/components/auth/login-form";
+import { LoginForm } from "universal-auth-nextjs";
 
 export default function LoginPage() {
   return (

@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { UserDto } from "@/types";
+import { UserDto } from "universal-auth-nextjs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { updateUser } from "@/services/authService";
+import { updateUser } from "universal-auth-nextjs";
 import { Loader2 } from "lucide-react";
 
 interface ProfileDetailsProps {
@@ -99,7 +99,7 @@ export function ProfileDetails({ initialUser }: ProfileDetailsProps) {
             <Label htmlFor="roles">Roles</Label>
             <div className="text-sm font-medium">
               {user.roles && user.roles.length > 0 
-                ? user.roles.map(r => r.role).join(", ") 
+                ? user.roles.map((r: any) => r.role).join(", ") 
                 : "USER"}
             </div>
           </div>
@@ -121,6 +121,18 @@ export function ProfileDetails({ initialUser }: ProfileDetailsProps) {
           </div>
         )}
       </CardContent>
+      <div className="flex justify-start px-6 pb-6">
+        <Button 
+          variant="destructive" 
+          onClick={async () => {
+            const { logout } = await import("universal-auth-nextjs");
+            await logout();
+            window.location.href = "/login";
+          }}
+        >
+          Logout of Account
+        </Button>
+      </div>
     </Card>
   );
 }

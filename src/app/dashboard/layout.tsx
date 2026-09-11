@@ -1,7 +1,7 @@
 import { ReactNode } from "react";
 import { UserNav } from "@/components/dashboard/user-nav";
-import { getUserId } from "@/app/actions/auth";
-import { getUserById } from "@/services/authService";
+import { getUserId } from "universal-auth-nextjs";
+import { getUserById } from "universal-auth-nextjs";
 import { redirect } from "next/navigation";
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
