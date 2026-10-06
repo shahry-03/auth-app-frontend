@@ -1,18 +1,14 @@
-import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
-import { Sidebar } from "@/components/dashboard/sidebar";
-import { TopBar } from "@/components/dashboard/top-bar";
+import { TwoFactorCard } from "@/components/dashboard/security/two-factor-card";
+import { ChangePasswordCard } from "@/components/dashboard/security/change-password-card";
+
+export const metadata = {
+  title: "Security",
+};
 
 interface BackendUser {
-  id: string;
-  email: string;
-  name: string;
-  image: string | null;
-  enabled: boolean;
-  createdAt: string;
   provider: string;
-  roles: { roleName: string; permissions: { name: string }[] }[];
 }
 
 async function fetchCurrentUser(
@@ -34,11 +30,7 @@ async function fetchCurrentUser(
   }
 }
 
-export default async function DashboardLayout({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export default async function SecurityPage() {
   const cookieStore = await cookies();
   const accessToken = cookieStore.get("accessToken")?.value;
 
@@ -48,17 +40,17 @@ export default async function DashboardLayout({
   if (!user) redirect("/login");
 
   return (
-    <div className="flex min-h-screen">
-      {/* ─── Sidebar ─── */}
-      <Sidebar user={user} />
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Security</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Manage your account security and authentication methods.
+        </p>
+      </div>
 
-      {/* ─── Main content ─── */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <TopBar user={user} />
-
-        <main className="flex-1 overflow-y-auto bg-slate-50 dark:bg-[#060913] p-8">
-          <div className="mx-auto max-w-6xl">{children}</div>
-        </main>
+      <div className="space-y-4">
+        <TwoFactorCard />
+        {user.provider === "LOCAL" && <ChangePasswordCard />}
       </div>
     </div>
   );
