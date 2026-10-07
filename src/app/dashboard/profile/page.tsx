@@ -1,5 +1,7 @@
+"use client";
+import { useAuth } from "@/hooks/useAuth";
+
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
 import { ProfileDetails } from "@/components/dashboard/profile-details";
 
 interface BackendUser {
@@ -13,33 +15,9 @@ interface BackendUser {
   roles: { roleName: string; permissions: { name: string }[] }[];
 }
 
-async function fetchCurrentUser(
-  accessToken: string
-): Promise<BackendUser | null> {
-  try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1"}/users/me`,
-      {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        cache: "no-store",
-      }
-    );
-    if (!res.ok) return null;
-    const json = await res.json();
-    return json.data as BackendUser;
-  } catch {
-    return null;
-  }
-}
-
-export default async function ProfilePage() {
-  const cookieStore = await cookies();
-  const accessToken = cookieStore.get("accessToken")?.value;
-
-  if (!accessToken) redirect("/login");
-
-  const user = await fetchCurrentUser(accessToken);
-  if (!user) redirect("/login");
+export default function ProfilePage() {
+  const { user } = useAuth();
+  if (!user) return null;
 
   return (
     <div className="space-y-6">

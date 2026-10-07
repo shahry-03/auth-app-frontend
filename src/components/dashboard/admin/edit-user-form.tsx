@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { apiClient } from "@/lib/api-client";
 import { toast } from "sonner";
-import { Loader2, Unlock } from "lucide-react";
+import { Loader2, Unlock, ShieldAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,28 +36,12 @@ export function EditUserForm({
     e.preventDefault();
     setIsEditing(true);
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1"}/admin/users/${user.id}`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(editData),
-        }
-      );
-
-      const json = await res.json();
-      if (res.ok) {
-        toast.success("User updated successfully");
-        setOpen(false);
-        router.refresh();
-      } else {
-        toast.error(json.message || "Failed to update user");
-      }
-    } catch {
-      toast.error("Error updating user");
+      await apiClient.put(`/admin/users/${user.id}`, editData);
+      toast.success("User updated successfully");
+      setOpen(false);
+      window.location.reload();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Error updating user");
     } finally {
       setIsEditing(false);
     }
@@ -65,19 +50,11 @@ export function EditUserForm({
   const handleUnlock = async () => {
     setIsUnlocking(true);
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1"}/admin/users/${user.id}/unlock`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }
-      );
-      if (res.ok) {
-        toast.success("User account unlocked");
-        router.refresh();
-      } else {
-        toast.error("Failed to unlock user");
-      }
+      // Use apiClient instead of fetch to ensure proper token handling
+      const res = await apiClient.post(`/admin/users/${user.id}/unlock`);
+      toast.success("User account unlocked");
+      setOpen(false);
+      window.location.reload();
     } catch {
       toast.error("Error unlocking user");
     } finally {
@@ -87,11 +64,6 @@ export function EditUserForm({
 
   return (
     <div className="flex items-center gap-2">
-      <Button variant="outline" onClick={handleUnlock} disabled={isUnlocking}>
-        {isUnlocking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Unlock className="mr-2 h-4 w-4" />}
-        Unlock Account
-      </Button>
-
       <Dialog open={open} onOpenChange={(val) => {
         setOpen(val);
         if (!val) setEditData({ name: user.name || "" });
@@ -111,20 +83,35 @@ export function EditUserForm({
                 placeholder="User's full name"
               />
             </div>
-            {/* Note: In a real system, you might not want to edit email if it's tied to an identity provider */}
             <div className="space-y-2">
               <Label>Email</Label>
               <Input value={user.email} disabled className="bg-muted" />
               <p className="text-xs text-muted-foreground">Email cannot be changed directly.</p>
             </div>
             
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <div className="space-y-3 pt-4 border-t">
+              <Label className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                <ShieldAlert className="h-4 w-4" /> Security Actions
+              </Label>
+              <div className="flex items-center justify-between rounded-lg border border-red-100 dark:border-red-900/30 bg-red-50/50 dark:bg-red-900/10 p-3">
+                <div className="space-y-0.5">
+                  <p className="text-sm font-medium">Clear Lockout</p>
+                  <p className="text-xs text-muted-foreground">Force unlock brute-force restrictions.</p>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={handleUnlock} disabled={isUnlocking} className="text-red-600 hover:text-red-700 hover:bg-red-100/50">
+                  {isUnlocking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Unlock className="mr-2 h-4 w-4" />}
+                  Force Unlock
+                </Button>
+              </div>
+            </div>
+
+            <DialogFooter className="pt-4 border-t">
+              <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
                 Cancel
               </Button>
               <Button type="submit" disabled={isEditing}>
                 {isEditing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save
+                Save Changes
               </Button>
             </DialogFooter>
           </form>

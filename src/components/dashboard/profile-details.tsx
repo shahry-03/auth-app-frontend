@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -13,9 +13,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { Loader2, Camera, Link as LinkIcon, Upload } from "lucide-react";
+import { Loader2, Camera, Trash2, X } from "lucide-react";
 import Cookies from "js-cookie";
 import { apiClient } from "@/lib/api-client";
+import { useAuthStore } from "@/lib/auth-store";
+import { tokenStore } from "@/lib/auth/token-store";
+import { useRouter } from "next/navigation";
+import { uploadFile } from "@/lib/api/files";
 
 // ============================================================
 //  Deterministic date formatter
@@ -47,32 +51,76 @@ interface ProfileDetailsProps {
 }
 
 export function ProfileDetails({ initialUser }: ProfileDetailsProps) {
+  const router = useRouter();
   const [user, setUser] = useState<UserProfile>(initialUser);
   const [isEditing, setIsEditing] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
     name: user.name || "",
-    image: user.image || "",
   });
 
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [removeExistingImage, setRemoveExistingImage] = useState(false);
+
+  // Clean up object URLs
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
   const handleSave = async () => {
-    setIsLoading(true);
+    setIsSaving(true);
+    let finalImageUrl: string | undefined = undefined;
+
+    // STEP 1 & 2: Handle Upload if new file selected
+    if (selectedFile) {
+      try {
+        finalImageUrl = await uploadFile(selectedFile, "profile");
+      } catch (error: any) {
+        const message = error.response?.data?.message || "Failed to upload profile image. Please try again.";
+        toast.error(message);
+        setIsSaving(false);
+        return; // STOP flow, don't update user
+      }
+    } else if (removeExistingImage) {
+      finalImageUrl = "";
+    }
+
+    // STEP 3: Update user profile
+    const payload: Record<string, any> = {
+      name: formData.name,
+    };
+    if (finalImageUrl !== undefined) {
+      payload.image = finalImageUrl;
+    }
+
     try {
-      const res = await apiClient.put<{ data: UserProfile }>("/users/me", {
-        name: formData.name,
-        image: formData.image,
-      });
-      setUser(res.data.data);
+      const res = await apiClient.put<{ data: UserProfile }>("/users/me", payload);
+      const updatedUser = res.data.data;
+      
+      setUser(updatedUser);
+      useAuthStore.setState({ user: updatedUser as any });
       setIsEditing(false);
-      toast.success("Profile updated successfully!");
-    } catch (error: unknown) {
-      const err = error as { response?: { data?: { message?: string } } };
-      toast.error(err.response?.data?.message || "Failed to update profile. (Note: If using Base64 images, ensure backend column size is large enough)");
+      
+      setSelectedFile(null);
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+        setPreviewUrl(null);
+      }
+      setRemoveExistingImage(false);
+
+      toast.success("Profile updated successfully.");
+      router.refresh();
+    } catch (error: any) {
+      const message = error.response?.data?.message || "Failed to update profile. Please try again.";
+      toast.error(message);
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
   };
 
@@ -82,11 +130,60 @@ export function ProfileDetails({ initialUser }: ProfileDetailsProps) {
     } catch {
       // Ignore
     }
-    localStorage.removeItem("accessToken");
+    tokenStore.clear();
     localStorage.removeItem("user");
-    Cookies.remove("accessToken", { path: "/" });
+    useAuthStore.getState().logout();
     Cookies.remove("refresh_token", { path: "/" });
     window.location.href = "/login";
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate type
+    const validTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    if (!validTypes.includes(file.type)) {
+      toast.error("Only JPEG, PNG, WEBP, and GIF images are allowed.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    // Validate size (2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("File size must be 2MB or less.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+
+    setSelectedFile(file);
+    setPreviewUrl(URL.createObjectURL(file));
+    setRemoveExistingImage(false);
+    
+    // Clear input so same file can be selected again if canceled
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleCancelNewImage = () => {
+    setSelectedFile(null);
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
+  };
+
+  const handleRemoveExistingImage = () => {
+    setRemoveExistingImage(true);
+    handleCancelNewImage();
+  };
+
+  const handleCancelEdit = () => {
+    setFormData({ name: user.name || "" });
+    handleCancelNewImage();
+    setRemoveExistingImage(false);
+    setIsEditing(false);
   };
 
   const initials = (formData.name || user.name || "U")
@@ -96,22 +193,23 @@ export function ProfileDetails({ initialUser }: ProfileDetailsProps) {
     .toUpperCase()
     .substring(0, 2);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (file.size > 1024 * 1024) { // 1MB limit for safety with Base64
-      toast.error("File is too large. Please select an image under 1MB.");
-      return;
+  const getDisplayedAvatarUrl = () => {
+    if (previewUrl) return previewUrl;
+    if (removeExistingImage) return undefined;
+    
+    if (!user.image) return undefined;
+    if (user.image.startsWith("http")) return user.image;
+    
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+    try {
+      const origin = new URL(baseUrl).origin;
+      return `${origin}${user.image}`;
+    } catch {
+      return user.image;
     }
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64 = event.target?.result as string;
-      setFormData({ ...formData, image: base64 });
-    };
-    reader.readAsDataURL(file);
   };
+
+  const displayedAvatar = getDisplayedAvatarUrl();
 
   return (
     <Card className="overflow-hidden rounded-[14px] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/50">
@@ -124,15 +222,9 @@ export function ProfileDetails({ initialUser }: ProfileDetailsProps) {
           <Button
             variant={isEditing ? "outline" : "default"}
             size="sm"
-            onClick={() => {
-              if (isEditing) {
-                setFormData({ name: user.name || "", image: user.image || "" });
-                setIsEditing(false);
-              } else {
-                setIsEditing(true);
-              }
-            }}
+            onClick={isEditing ? handleCancelEdit : () => setIsEditing(true)}
             className={isEditing ? "" : "bg-indigo-600 hover:bg-indigo-700 text-white"}
+            disabled={isSaving}
           >
             {isEditing ? "Cancel" : "Edit Profile"}
           </Button>
@@ -142,33 +234,83 @@ export function ProfileDetails({ initialUser }: ProfileDetailsProps) {
       <CardContent className="p-7 space-y-8">
         {/* Avatar Section */}
         <div className="flex items-center gap-6">
-          <div className="relative">
-            <Avatar className="h-24 w-24 border border-slate-200 dark:border-slate-700 shadow-sm">
-              <AvatarImage src={isEditing ? formData.image : (user.image || "")} alt={user.name || "User"} className="object-cover" />
+          <div className="relative group">
+            <Avatar className="h-24 w-24 border border-slate-200 dark:border-slate-700 shadow-sm transition-all">
+              <AvatarImage src={displayedAvatar} alt={user.name || "User"} className="object-cover" />
               <AvatarFallback className="bg-slate-100 dark:bg-slate-800 text-2xl font-bold text-slate-500 dark:text-slate-400">
                 {initials}
               </AvatarFallback>
             </Avatar>
+            
             {isEditing && (
-              <button 
-                onClick={() => fileInputRef.current?.click()}
-                className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors"
-                title="Upload Image"
-              >
-                <Camera className="h-4 w-4" />
-              </button>
+              <div className="absolute inset-0 flex flex-col items-center justify-center rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="text-white hover:text-indigo-200 flex flex-col items-center gap-1"
+                >
+                  <Camera className="h-5 w-5" />
+                  <span className="text-[10px] font-semibold">Change</span>
+                </button>
+              </div>
             )}
+            
             <input 
               type="file" 
               ref={fileInputRef} 
               className="hidden" 
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp,image/gif"
               onChange={handleFileChange}
             />
           </div>
-          <div className="space-y-1">
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white">{isEditing ? (formData.name || "Your Name") : (user.name || "Your Name")}</h3>
-            <p className="text-[14.5px] text-slate-500">{user.email}</p>
+          
+          <div className="space-y-3">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">{isEditing ? (formData.name || "Your Name") : (user.name || "Your Name")}</h3>
+              <p className="text-[14.5px] text-slate-500">{user.email}</p>
+            </div>
+            
+            {isEditing && (
+              <div className="flex items-center gap-2">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm"
+                  className="h-8 text-[12px]"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isSaving}
+                >
+                  Change Photo
+                </Button>
+                
+                {selectedFile && (
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="sm"
+                    className="h-8 text-[12px] text-slate-500"
+                    onClick={handleCancelNewImage}
+                    disabled={isSaving}
+                  >
+                    <X className="mr-1.5 h-3 w-3" />
+                    Cancel
+                  </Button>
+                )}
+
+                {!selectedFile && (user.image || previewUrl) && !removeExistingImage && (
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="sm"
+                    className="h-8 text-[12px] text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10"
+                    onClick={handleRemoveExistingImage}
+                    disabled={isSaving}
+                  >
+                    <Trash2 className="mr-1.5 h-3 w-3" />
+                    Remove
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -184,6 +326,7 @@ export function ProfileDetails({ initialUser }: ProfileDetailsProps) {
                   setFormData({ ...formData, name: e.target.value })
                 }
                 className="h-10"
+                disabled={isSaving}
               />
             ) : (
               <div className="text-[14.5px] font-medium text-slate-900 dark:text-slate-200">{user.name || "N/A"}</div>
@@ -194,26 +337,6 @@ export function ProfileDetails({ initialUser }: ProfileDetailsProps) {
             <Label className="text-[12px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Email Address</Label>
             <div className="text-[14.5px] font-medium text-slate-900 dark:text-slate-200">{user.email}</div>
           </div>
-
-          {isEditing && (
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="image" className="text-[12px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Profile Image URL (Optional)</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="image"
-                  value={formData.image}
-                  onChange={(e) =>
-                    setFormData({ ...formData, image: e.target.value })
-                  }
-                  placeholder="https://example.com/avatar.jpg"
-                  className="h-10"
-                />
-              </div>
-              <p className="text-[12px] text-slate-500 mt-1">
-                You can paste an image URL or click the camera icon on your avatar to upload a file directly.
-              </p>
-            </div>
-          )}
 
           <div className="space-y-2">
             <Label className="text-[12px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Auth Provider</Label>
@@ -239,9 +362,19 @@ export function ProfileDetails({ initialUser }: ProfileDetailsProps) {
 
         {isEditing && (
           <div className="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-800/60">
-            <Button onClick={handleSave} disabled={isLoading} className="bg-indigo-600 hover:bg-indigo-700 text-white">
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Changes
+            <Button 
+              onClick={handleSave} 
+              disabled={isSaving} 
+              className="bg-indigo-600 hover:bg-indigo-700 text-white min-w-[130px]"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Changes"
+              )}
             </Button>
           </div>
         )}

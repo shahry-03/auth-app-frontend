@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { apiClient } from "@/lib/api-client";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -46,28 +47,12 @@ export function EditRoleForm({
     e.preventDefault();
     setIsEditing(true);
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1"}/admin/roles/${role.id}`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(editData),
-        }
-      );
-
-      const json = await res.json();
-      if (res.ok) {
-        toast.success("Role updated successfully");
-        setOpen(false);
-        router.refresh(); // Refresh the page to get updated server data
-      } else {
-        toast.error(json.message || "Failed to update role");
-      }
-    } catch {
-      toast.error("Error updating role");
+      await apiClient.put(`/admin/roles/${role.id}`, editData);
+      toast.success("Role updated successfully");
+      setOpen(false);
+      window.location.reload();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Error updating role");
     } finally {
       setIsEditing(false);
     }

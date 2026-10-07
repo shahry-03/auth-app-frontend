@@ -1,14 +1,18 @@
-import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+"use client";
+
+import { useAuth } from "@/hooks/useAuth";
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { EditRoleForm } from "@/components/dashboard/admin/edit-role-form";
+import { apiClient } from "@/lib/api-client";
 
 interface RoleResponse {
   id: string;
   roleName: string;
   description: string;
-  permissions: { name: string; description: string }[];
+  permissions: { id: string; name: string; description: string }[];
 }
 
 interface PermissionResponse {
@@ -17,71 +21,54 @@ interface PermissionResponse {
   description: string;
 }
 
-async function fetchRole(accessToken: string, roleId: string): Promise<RoleResponse | null> {
-  try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1"}/admin/roles/${roleId}`,
-      {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        cache: "no-store",
+export default function AdminRoleDetailPage() {
+  const { user } = useAuth();
+  const params = useParams();
+  const id = params.id as string;
+  
+  const [role, setRole] = useState<RoleResponse | null>(null);
+  const [permissions, setPermissions] = useState<PermissionResponse[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+    async function loadData() {
+      try {
+        const [roleRes, permRes] = await Promise.all([
+          apiClient.get(`/admin/roles/${id}`),
+          apiClient.get('/admin/permissions')
+        ]);
+        setRole(roleRes.data?.data);
+        setPermissions(permRes.data?.data?.content || []);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsLoading(false);
       }
+    }
+    loadData();
+  }, [user, id]);
+
+  if (!user) return null;
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+      </div>
     );
-    if (!res.ok) return null;
-    const json = await res.json();
-    return json.data as RoleResponse;
-  } catch {
-    return null;
   }
-}
-
-async function fetchPermissions(accessToken: string): Promise<PermissionResponse[]> {
-  try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1"}/admin/permissions`,
-      {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        cache: "no-store",
-      }
-    );
-    if (!res.ok) return [];
-    const json = await res.json();
-    return json.data as PermissionResponse[];
-  } catch {
-    return [];
-  }
-}
-
-export default async function AdminRoleDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const cookieStore = await cookies();
-  const accessToken = cookieStore.get("accessToken")?.value;
-
-  if (!accessToken) redirect("/login");
-
-  const resolvedParams = await params;
-  const [role, permissions] = await Promise.all([
-    fetchRole(accessToken, resolvedParams.id),
-    fetchPermissions(accessToken)
-  ]);
 
   if (!role) {
     return (
       <div className="space-y-6">
-        <Link
-          href="/dashboard/admin/roles"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-        >
+        <Link href="/dashboard/admin/roles" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-3.5 w-3.5" />
           Back to Roles
         </Link>
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Role Not Found</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            The role you are looking for does not exist.
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">The role you are looking for does not exist.</p>
         </div>
       </div>
     );
@@ -89,10 +76,7 @@ export default async function AdminRoleDetailPage({
 
   return (
     <div className="space-y-6">
-      <Link
-        href="/dashboard/admin/roles"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-      >
+      <Link href="/dashboard/admin/roles" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="h-3.5 w-3.5" />
         Back to Roles
       </Link>
@@ -101,10 +85,10 @@ export default async function AdminRoleDetailPage({
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Role Details</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Detailed information about the {role.roleName} role.
+            Manage permissions for {role.roleName}.
           </p>
         </div>
-        <EditRoleForm role={role} allPermissions={permissions} accessToken={accessToken} />
+        <EditRoleForm role={role} allPermissions={permissions} accessToken="" />
       </div>
 
       <div className="rounded-xl border bg-card p-6">
@@ -135,8 +119,8 @@ export default async function AdminRoleDetailPage({
               {role.permissions?.length > 0 ? (
                 role.permissions.map((p) => (
                   <span
-                    key={p.name}
-                    className="rounded bg-muted px-2 py-1 text-xs text-muted-foreground"
+                    key={p.id}
+                    className="inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold"
                   >
                     {p.name}
                   </span>

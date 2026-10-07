@@ -1,5 +1,6 @@
+"use client";
+
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
 import { SessionsList, type Session } from "@/components/dashboard/sessions/sessions-list";
 
 export const metadata = {
@@ -23,11 +24,11 @@ async function fetchSessions(accessToken: string): Promise<Session[]> {
   }
 }
 
-export default async function SessionsPage() {
+export default function SessionsPage() {
   const cookieStore = await cookies();
-  const accessToken = cookieStore.get("accessToken")?.value;
-
-  if (!accessToken) redirect("/login");
+  const refreshToken = cookieStore.get("refresh_token")?.value;
+  const { user } = useAuth();
+  if (!user) return null;
 
   const sessions = await fetchSessions(accessToken);
 

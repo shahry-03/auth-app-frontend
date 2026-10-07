@@ -17,6 +17,8 @@ import {
 import { toast } from "sonner";
 import { AxiosError } from "axios";
 import Cookies from "js-cookie";
+import { tokenStore } from "@/lib/auth/token-store";
+import { clearAuthCache } from "@/hooks/useAuth";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -121,15 +123,9 @@ export function LoginForm() {
     accessToken: string,
     user: Record<string, unknown>
   ) => {
-    localStorage.setItem("accessToken", accessToken);
+    clearAuthCache();
+    tokenStore.set(accessToken);
     localStorage.setItem("user", JSON.stringify(user));
-
-    Cookies.set("accessToken", accessToken, {
-      expires: 1,
-      path: "/",
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-    });
 
     toast.success("Welcome back!");
     router.push(callbackUrl);

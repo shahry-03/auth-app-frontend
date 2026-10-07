@@ -97,11 +97,9 @@ export function VerifyEmailForm({ token, email }: VerifyEmailFormProps) {
             <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white text-center">Email Verified!</h1>
             <p className="text-[15px] text-slate-500 text-center">{message}</p>
           </div>
-          <Button asChild className="h-12 w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-medium shadow-md shadow-blue-500/20 border-0 transition-all text-base mt-2">
-            <Link href="/login">
-              Continue to login
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Link>
+          <Button onClick={() => router.push("/login")} className="h-12 w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-medium shadow-md shadow-blue-500/20 border-0 transition-all text-base mt-2">
+            Continue to login
+            <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </>
       )}
@@ -129,8 +127,8 @@ export function VerifyEmailForm({ token, email }: VerifyEmailFormProps) {
                 Resend verification email
               </Button>
             )}
-            <Button asChild variant={email ? "ghost" : "outline"} className="w-full h-12 text-base font-medium">
-              <Link href="/login">Back to login</Link>
+            <Button onClick={() => router.push("/login")} variant={email ? "ghost" : "outline"} className="w-full h-12 text-base font-medium">
+              Back to login
             </Button>
           </div>
         </>

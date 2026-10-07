@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { apiClient } from "@/lib/api-client";
 import { toast } from "sonner";
 import { MoreHorizontal, Plus, Loader2 } from "lucide-react";
 import Link from "next/link";
@@ -68,29 +69,13 @@ export function RolesTable({
     
     setIsCreating(true);
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1"}/admin/roles`,
-        {
-          method: "POST",
-          headers: { 
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(createData),
-        }
-      );
-      
-      const json = await res.json();
-      if (res.ok) {
-        setRoles([...roles, json.data]);
-        toast.success("Role created successfully");
-        setCreateOpen(false);
-        setCreateData({ roleName: "", description: "", permissions: [] });
-      } else {
-        toast.error(json.message || "Failed to create role");
-      }
-    } catch {
-      toast.error("Error creating role");
+      const res = await apiClient.post('/admin/roles', createData);
+      setRoles([...roles, res.data.data]);
+      toast.success("Role created successfully");
+      setCreateOpen(false);
+      setCreateData({ roleName: "", description: "", permissions: [] });
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Error creating role");
     } finally {
       setIsCreating(false);
     }
@@ -99,19 +84,9 @@ export function RolesTable({
   const deleteRole = async (roleId: string) => {
     if (!confirm("Are you sure you want to delete this role?")) return;
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1"}/admin/roles/${roleId}`,
-        {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }
-      );
-      if (res.ok) {
-        setRoles(roles.filter((r) => r.id !== roleId));
-        toast.success("Role deleted successfully");
-      } else {
-        toast.error("Failed to delete role");
-      }
+      await apiClient.delete(`/admin/roles/${roleId}`);
+      setRoles(roles.filter((r) => r.id !== roleId));
+      toast.success("Role deleted successfully");
     } catch {
       toast.error("Error deleting role");
     }

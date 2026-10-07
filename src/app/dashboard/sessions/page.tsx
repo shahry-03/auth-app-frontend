@@ -1,38 +1,25 @@
-import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
-import {
-  SessionsList,
-  type Session,
-} from "@/components/dashboard/sessions/sessions-list";
+"use client";
 
-export const metadata = {
-  title: "Sessions",
-};
+import { useAuth } from "@/hooks/useAuth";
+import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
+import { SessionsList, type Session } from "@/components/dashboard/sessions/sessions-list";
+import { apiClient } from "@/lib/api-client";
 
-async function fetchSessions(accessToken: string): Promise<Session[]> {
-  try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1"}/users/me/sessions`,
-      {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        cache: "no-store",
-      }
-    );
-    if (!res.ok) return [];
-    const json = await res.json();
-    return (json.data ?? []) as Session[];
-  } catch {
-    return [];
-  }
-}
+export default function SessionsPage() {
+  const { user } = useAuth();
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-export default async function SessionsPage() {
-  const cookieStore = await cookies();
-  const accessToken = cookieStore.get("accessToken")?.value;
+  useEffect(() => {
+    if (!user) return;
+    apiClient.get('/users/me/sessions')
+      .then(res => setSessions(res.data?.data || []))
+      .catch(console.error)
+      .finally(() => setIsLoading(false));
+  }, [user]);
 
-  if (!accessToken) redirect("/login");
-
-  const sessions = await fetchSessions(accessToken);
+  if (!user) return null;
 
   return (
     <div className="space-y-6">
@@ -43,7 +30,11 @@ export default async function SessionsPage() {
         </p>
       </div>
 
-      <SessionsList initialSessions={sessions} />
+      {isLoading ? (
+        <div className="flex justify-center p-8"><Loader2 className="h-6 w-6 animate-spin text-blue-500" /></div>
+      ) : (
+        <SessionsList initialSessions={sessions} accessToken="" />
+      )}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import axios, {
   type AxiosResponse,
   type InternalAxiosRequestConfig,
 } from "axios";
+import { tokenStore } from "./auth/token-store";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1";
@@ -14,12 +15,17 @@ export const apiClient = axios.create({
 });
 
 // ============================================================
-//  Request interceptor — JWT auto-attach
+//  Request interceptor — JWT auto-attach & FormData handling
 // ============================================================
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
+    // 🔥 Remove default Content-Type for FormData to allow browser to generate boundary
+    if (config.data instanceof FormData) {
+      delete config.headers["Content-Type"];
+    }
+
     if (typeof window !== "undefined") {
-      const token = localStorage.getItem("accessToken");
+      const token = tokenStore.get();
       // Guard against corrupt tokens
       if (
         token &&
@@ -30,7 +36,7 @@ apiClient.interceptors.request.use(
         config.headers.Authorization = `Bearer ${token}`;
       } else if (token) {
         // Clean up corrupt token
-        localStorage.removeItem("accessToken");
+        tokenStore.clear();
       }
     }
     return config;
@@ -62,10 +68,21 @@ apiClient.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as RetryableRequest | undefined;
 
+    // Do not attempt to refresh token if the 401 came from a login/2FA endpoint
+    // where 401 typically means "Invalid Code" or "Invalid Password" rather than "Expired JWT"
+    const isAuthEndpoint = originalRequest?.url && (
+      originalRequest.url.includes('/auth/login') ||
+      originalRequest.url.includes('/auth/2fa/enable') ||
+      originalRequest.url.includes('/auth/2fa/disable') ||
+      originalRequest.url.includes('/auth/2fa/verify') ||
+      originalRequest.url.includes('/auth/refresh')
+    );
+
     if (
       error.response?.status === 401 &&
       originalRequest &&
-      !originalRequest._retry
+      !originalRequest._retry &&
+      !isAuthEndpoint
     ) {
       originalRequest._retry = true;
 
@@ -76,7 +93,6 @@ apiClient.interceptors.response.use(
           { withCredentials: true }
         );
 
-        // ✅ FIX: Proper nested path — response.data.data.accessToken
         const newToken = response.data?.data?.accessToken;
 
         if (!newToken || newToken === "undefined") {
@@ -84,14 +100,14 @@ apiClient.interceptors.response.use(
         }
 
         if (typeof window !== "undefined") {
-          localStorage.setItem("accessToken", newToken);
+          tokenStore.set(newToken);
         }
 
         originalRequest.headers.Authorization = `Bearer ${newToken}`;
         return apiClient(originalRequest);
       } catch {
         if (typeof window !== "undefined") {
-          localStorage.removeItem("accessToken");
+          tokenStore.clear();
           localStorage.removeItem("user");
           // eslint-disable-next-line @next/next/no-location-assign-relative-destination
           window.location.href = "/login";

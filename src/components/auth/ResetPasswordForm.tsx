@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -20,9 +20,10 @@ const resetPasswordSchema = z
     password: z
       .string()
       .min(8, "Password must be at least 8 characters")
-      .regex(/[A-Z]/, "Must contain an uppercase letter")
-      .regex(/[a-z]/, "Must contain a lowercase letter")
-      .regex(/[0-9]/, "Must contain a number"),
+      .regex(
+        /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/,
+        "Password must contain at least 1 letter, 1 digit, and 1 special character (@$!%*?&)"
+      ),
     confirmPassword: z.string(),
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -32,14 +33,19 @@ const resetPasswordSchema = z
 
 type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 
-interface ResetPasswordFormProps {
-  token: string;
-}
-
-export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
+export function ResetPasswordForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const token = searchParams.get("token");
+
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+
+  useEffect(() => {
+    if (!token) {
+      toast.error("Reset link is invalid or missing token");
+    }
+  }, [token]);
 
   const {
     register,
@@ -51,6 +57,11 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
   });
 
   const onSubmit = async (data: ResetPasswordInput) => {
+    if (!token) {
+      toast.error("Reset link is invalid or missing token");
+      return;
+    }
+
     setIsLoading(true);
     try {
       await apiClient.post("/auth/reset-password", {
@@ -58,7 +69,7 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
         newPassword: data.password,
       });
       setIsSuccess(true);
-      toast.success("Password reset successfully");
+      toast.success("Password reset successfully. Please login with your new password.");
     } catch (err) {
       const axiosError = err as AxiosError<{ message?: string }>;
       if (axiosError.response?.data?.message) {
@@ -83,11 +94,9 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
             your new password.
           </p>
         </div>
-        <Button asChild className="h-12 w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-medium shadow-md shadow-blue-500/20 border-0 transition-all text-base mt-2">
-          <Link href="/login">
-            Sign in
-            <ArrowRight className="ml-2 h-4 w-4" />
-          </Link>
+        <Button onClick={() => router.push("/login")} className="h-12 w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-medium shadow-md shadow-blue-500/20 border-0 transition-all text-base mt-2">
+          Sign in
+          <ArrowRight className="ml-2 h-4 w-4" />
         </Button>
       </div>
     );
@@ -110,7 +119,7 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
             placeholder="••••••••"
             autoComplete="new-password"
             autoFocus
-            disabled={isLoading}
+            disabled={isLoading || !token}
             className="h-11 border-slate-200 dark:border-slate-800 shadow-sm"
             {...register("password")}
           />
@@ -125,7 +134,7 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
             id="confirmPassword"
             placeholder="••••••••"
             autoComplete="new-password"
-            disabled={isLoading}
+            disabled={isLoading || !token}
             className="h-11 border-slate-200 dark:border-slate-800 shadow-sm"
             {...register("confirmPassword")}
           />
@@ -134,7 +143,7 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
           )}
         </div>
 
-        <Button type="submit" className="h-12 w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-medium shadow-md shadow-blue-500/20 border-0 transition-all text-base mt-2" disabled={isLoading}>
+        <Button type="submit" className="h-12 w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-medium shadow-md shadow-blue-500/20 border-0 transition-all text-base mt-2" disabled={isLoading || !token}>
           {isLoading ? (
             <>
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />

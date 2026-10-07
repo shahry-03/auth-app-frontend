@@ -1,51 +1,42 @@
+"use client";
+
 import type { ReactNode } from "react";
-import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { TopBar } from "@/components/dashboard/top-bar";
+import { useAuth } from "@/hooks/useAuth";
+import { Loader2 } from "lucide-react";
 
-interface BackendUser {
-  id: string;
-  email: string;
-  name: string;
-  image: string | null;
-  enabled: boolean;
-  createdAt: string;
-  provider: string;
-  roles: { roleName: string; permissions: { name: string }[] }[];
+function FullPageSpinner() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-[#060913]">
+      <Loader2 className="h-10 w-10 animate-spin text-blue-500" />
+    </div>
+  );
 }
 
-async function fetchCurrentUser(
-  accessToken: string
-): Promise<BackendUser | null> {
-  try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1"}/users/me`,
-      {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        cache: "no-store",
-      }
-    );
-    if (!res.ok) return null;
-    const json = await res.json();
-    return json.data as BackendUser;
-  } catch {
-    return null;
-  }
-}
-
-export default async function DashboardLayout({
+export default function DashboardLayout({
   children,
 }: {
   children: ReactNode;
 }) {
-  const cookieStore = await cookies();
-  const accessToken = cookieStore.get("accessToken")?.value;
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
 
-  if (!accessToken) redirect("/login");
+  useEffect(() => {
+    if (!isLoading && !user) {
+      router.replace("/login");
+    }
+  }, [isLoading, user, router]);
 
-  const user = await fetchCurrentUser(accessToken);
-  if (!user) redirect("/login");
+  if (isLoading) {
+    return <FullPageSpinner />;
+  }
+
+  if (!user) {
+    return null; // will redirect
+  }
 
   return (
     <div className="flex min-h-screen">

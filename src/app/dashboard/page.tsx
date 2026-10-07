@@ -1,5 +1,9 @@
+"use client";
+
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { useState, useEffect } from "react";
+import { apiClient } from "@/lib/api-client";
+import { useAuth } from "@/hooks/useAuth";
 import Link from "next/link";
 import {
   Shield,
@@ -26,25 +30,6 @@ interface BackendUser {
   roles: { roleName: string; permissions: { name: string }[] }[];
 }
 
-async function fetchCurrentUser(
-  accessToken: string
-): Promise<BackendUser | null> {
-  try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1"}/users/me`,
-      {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        cache: "no-store",
-      }
-    );
-    if (!res.ok) return null;
-    const json = await res.json();
-    return json.data as BackendUser;
-  } catch {
-    return null;
-  }
-}
-
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return "N/A";
   const d = new Date(iso);
@@ -63,17 +48,28 @@ function getGreeting(): string {
   return "Good evening";
 }
 
-export default async function DashboardOverviewPage() {
-  const cookieStore = await cookies();
-  const accessToken = cookieStore.get("accessToken")?.value;
+export default function DashboardOverviewPage() {
+  const { user } = useAuth();
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [loading2FA, setLoading2FA] = useState(true);
+  const [sessionsCount, setSessionsCount] = useState<number | null>(null);
 
-  if (!accessToken) redirect("/login");
+  useEffect(() => {
+    if (!user) return;
+    Promise.all([
+      apiClient.get('/auth/2fa/status').catch(() => ({ data: { data: { enabled: false } } })),
+      apiClient.get('/users/me/sessions').catch(() => ({ data: { data: [] } }))
+    ]).then(([twoFaRes, sessionsRes]) => {
+      setTwoFactorEnabled(twoFaRes.data?.data?.enabled || false);
+      setSessionsCount(sessionsRes.data?.data?.length || 1);
+    }).finally(() => {
+      setLoading2FA(false);
+    });
+  }, [user]);
+  if (!user) return null;
 
-  const user = await fetchCurrentUser(accessToken);
-  if (!user) redirect("/login");
-
-  const primaryRole = user.roles?.[0]?.roleName ?? "USER";
-  const firstName = user.name?.split(" ")[0] ?? "there";
+  const primaryRole = user.roles?.[0]?.roleName || "USER";
+  const firstName = user.name?.split(" ")[0] || "User";
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -104,15 +100,15 @@ export default async function DashboardOverviewPage() {
         <StatCard
           icon={Shield}
           label="Two-Factor"
-          value="Disabled"
-          hint="Add extra security"
-          accent="orange"
+          value={loading2FA ? "..." : twoFactorEnabled ? "Protected" : "Disabled"}
+          hint={loading2FA ? "Loading" : twoFactorEnabled ? "2FA is enabled" : "Add extra security"}
+          accent={loading2FA ? "blue" : twoFactorEnabled ? "green" : "orange"}
         />
         <StatCard
           icon={Monitor}
           label="Active Sessions"
-          value="1"
-          hint="Current device"
+          value={sessionsCount === null ? "..." : sessionsCount.toString()}
+          hint={sessionsCount === 1 ? "Current device" : "Multiple devices"}
           accent="blue"
         />
         <StatCard

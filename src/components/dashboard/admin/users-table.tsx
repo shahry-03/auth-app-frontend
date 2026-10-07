@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { apiClient } from "@/lib/api-client";
 import { toast } from "sonner";
 import { MoreHorizontal } from "lucide-react";
 import Link from "next/link";
@@ -32,23 +33,13 @@ export function UsersTable({
 
   const toggleUserStatus = async (userId: string, currentStatus: boolean) => {
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1"}/admin/users/${userId}/status?enabled=${!currentStatus}`,
-        {
-          method: "PATCH",
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }
+      await apiClient.patch(`/admin/users/${userId}/status?enabled=${!currentStatus}`);
+      setUsers(
+        users.map((u) =>
+          u.id === userId ? { ...u, enabled: !currentStatus } : u
+        )
       );
-      if (res.ok) {
-        setUsers(
-          users.map((u) =>
-            u.id === userId ? { ...u, enabled: !currentStatus } : u
-          )
-        );
-        toast.success(`User ${!currentStatus ? "enabled" : "disabled"} successfully`);
-      } else {
-        toast.error("Failed to update user status");
-      }
+      toast.success(`User ${!currentStatus ? "enabled" : "disabled"} successfully`);
     } catch {
       toast.error("Error updating user");
     }
@@ -57,19 +48,9 @@ export function UsersTable({
   const deleteUser = async (userId: string) => {
     if (!confirm("Are you sure you want to delete this user?")) return;
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1"}/admin/users/${userId}`,
-        {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }
-      );
-      if (res.ok) {
-        setUsers(users.filter((u) => u.id !== userId));
-        toast.success("User deleted successfully");
-      } else {
-        toast.error("Failed to delete user");
-      }
+      await apiClient.delete(`/admin/users/${userId}`);
+      setUsers(users.filter((u) => u.id !== userId));
+      toast.success("User deleted successfully");
     } catch {
       toast.error("Error deleting user");
     }

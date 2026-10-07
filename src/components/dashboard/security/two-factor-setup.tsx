@@ -15,6 +15,8 @@ import { toast } from "sonner";
 import { AxiosError } from "axios";
 import Link from "next/link";
 
+let globalSetupPromise: Promise<any> | null = null;
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -58,7 +60,10 @@ export function TwoFactorSetup() {
   const [copied, setCopied] = useState(false);
   const [password, setPassword] = useState("");
 
-  // ─── Initial load ───
+
+
+
+// ─── Initial load ───
   useEffect(() => {
     if (mode === "disable") {
       return;
@@ -67,14 +72,16 @@ export function TwoFactorSetup() {
     let cancelled = false;
     const load = async () => {
       try {
-        const res = await apiClient.post<{ data: SetupResponse }>(
-          "/auth/2fa/setup"
-        );
+        if (!globalSetupPromise) {
+          globalSetupPromise = apiClient.post<{ data: SetupResponse }>("/auth/2fa/setup");
+        }
+        const res = await globalSetupPromise;
         if (!cancelled) {
           setSetupData(res.data.data);
           setStep("qr");
         }
       } catch (err) {
+        globalSetupPromise = null; // Reset on error
         if (cancelled) return;
         const axiosError = err as AxiosError<{ message?: string }>;
         toast.error(
@@ -89,6 +96,15 @@ export function TwoFactorSetup() {
       cancelled = true;
     };
   }, [mode, router]);
+
+  useEffect(() => {
+    return () => {
+      // Clear the global promise safely after StrictMode simulated unmount
+      setTimeout(() => {
+        globalSetupPromise = null;
+      }, 500);
+    };
+  }, []);
 
   const handleCopySecret = () => {
     if (!setupData?.secret) return;

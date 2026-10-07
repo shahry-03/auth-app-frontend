@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { apiClient } from "@/lib/api-client";
 import { toast } from "sonner";
 import { Loader2, Plus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -26,21 +27,11 @@ export function ManageUserRoles({
   const handleAssignRole = async (roleId: string) => {
     setIsUpdating(true);
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1"}/admin/roles/users/${userId}/assign/${roleId}`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }
-      );
-      if (res.ok) {
-        toast.success("Role assigned to user");
-        router.refresh();
-      } else {
-        toast.error("Failed to assign role");
-      }
-    } catch {
-      toast.error("Error assigning role");
+      await apiClient.post(`/admin/roles/users/${userId}/assign/${roleId}`);
+      toast.success("Role assigned to user");
+      window.location.reload();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Error assigning role");
     } finally {
       setIsUpdating(false);
     }
@@ -49,21 +40,11 @@ export function ManageUserRoles({
   const handleRemoveRole = async (roleId: string) => {
     setIsUpdating(true);
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1"}/admin/roles/users/${userId}/remove/${roleId}`,
-        {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }
-      );
-      if (res.ok) {
-        toast.success("Role removed from user");
-        router.refresh();
-      } else {
-        toast.error("Failed to remove role");
-      }
-    } catch {
-      toast.error("Error removing role");
+      await apiClient.delete(`/admin/roles/users/${userId}/remove/${roleId}`);
+      toast.success("Role removed from user");
+      window.location.reload();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Error removing role");
     } finally {
       setIsUpdating(false);
     }

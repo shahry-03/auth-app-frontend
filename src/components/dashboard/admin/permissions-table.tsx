@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { apiClient } from "@/lib/api-client";
 import { toast } from "sonner";
 import { MoreHorizontal, Plus, Loader2 } from "lucide-react";
 import {
@@ -43,22 +44,12 @@ export function PermissionsTable({
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<{ id: string; description: string } | null>(null);
 
-  const deletePermission = async (permissionId: string) => {
+  const deletePermission = async (permId: string) => {
     if (!confirm("Are you sure you want to delete this permission?")) return;
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1"}/admin/permissions/${permissionId}`,
-        {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }
-      );
-      if (res.ok) {
-        setPermissions(permissions.filter((p) => p.id !== permissionId));
-        toast.success("Permission deleted successfully");
-      } else {
-        toast.error("Failed to delete permission");
-      }
+      await apiClient.delete(`/admin/permissions/${permId}`);
+      setPermissions(permissions.filter((p) => p.id !== permId));
+      toast.success("Permission deleted successfully");
     } catch {
       toast.error("Error deleting permission");
     }
@@ -70,29 +61,13 @@ export function PermissionsTable({
     
     setIsCreating(true);
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1"}/admin/permissions`,
-        {
-          method: "POST",
-          headers: { 
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(createData),
-        }
-      );
-      
-      const json = await res.json();
-      if (res.ok) {
-        setPermissions([...permissions, json.data]);
-        toast.success("Permission created successfully");
-        setCreateOpen(false);
-        setCreateData({ name: "", description: "" });
-      } else {
-        toast.error(json.message || "Failed to create permission");
-      }
-    } catch {
-      toast.error("Error creating permission");
+      const res = await apiClient.post('/admin/permissions', createData);
+      setPermissions([...permissions, res.data.data]);
+      toast.success("Permission created successfully");
+      setCreateOpen(false);
+      setCreateData({ name: "", description: "" });
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Error creating permission");
     } finally {
       setIsCreating(false);
     }

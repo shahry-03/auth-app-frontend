@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Cookies from "js-cookie";
+import { tokenStore } from "@/lib/auth/token-store";
 import { Loader2 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 
@@ -22,16 +23,8 @@ export default function OAuthCallbackPage() {
         const accessToken = response.data?.data?.accessToken;
 
         if (accessToken) {
-          // Save for client-side API calls
-          localStorage.setItem("accessToken", accessToken);
-          
-          // Save for Next.js Server Components (like DashboardLayout)
-          Cookies.set("accessToken", accessToken, {
-            expires: 1,
-            path: "/",
-            sameSite: "lax",
-            secure: process.env.NODE_ENV === "production",
-          });
+          // Save for client-side API calls in memory
+          tokenStore.set(accessToken);
           
           // Fetch user details to populate localStorage (optional but good practice)
           try {
